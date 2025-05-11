@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  gector-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: gector-api:latest
+    container_name: gector-api
+    restart: unless-stopped
+    ports:
+      - "7860:7860"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+    volumes:
+      # data persistence
+      - ./data:/app/data
+      # log persistence
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    # provide some performance suggestions
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+# you can use the following command to start:
+# docker-compose up -d
+# 
+# view the logs:
+# docker-compose logs -f
+#
+# stop the service:
+# docker-compose down 

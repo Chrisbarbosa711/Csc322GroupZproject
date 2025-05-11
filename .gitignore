@@ -43,6 +43,4 @@ gector-api/models/
 # Temp files
 .DS_Store
 
-# 忽略整个 gector-api 目录，因为它可能包含大型文件
-gector-api/
 
