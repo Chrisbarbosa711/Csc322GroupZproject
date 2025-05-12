@@ -1,10 +1,69 @@
-# LLM Editor Backend
+# 后端说明
 
-The backend service for LLM Editor application, providing user authentication, document management, and API support for the frontend application.
+本文件夹包含应用程序的后端服务，基于FastAPI框架开发。
 
-## Overview
+## 环境设置
 
-This FastAPI-based backend serves as the primary API service for the LLM Editor platform. It manages user authentication, document storage and retrieval, collaboration functionality, and administrative features.
+1. 首先确保安装了MySQL服务器，并设置好相应的用户名和密码。
+
+2. 创建虚拟环境（推荐使用Python 3.10+）：
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # 在Windows上使用：venv\Scripts\activate
+   ```
+
+3. 安装依赖：
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. 配置环境变量：
+   - 复制`.env.example`文件为`.env`（如果不存在，已提供默认的`.env`文件）
+   - 根据您的MySQL配置修改`.env`文件中的数据库连接信息
+
+## 数据库初始化
+
+1. 创建数据库：
+   ```bash
+   python create_db.py
+   ```
+
+2. 启动应用时会自动创建表并填充初始数据（如果`USE_MOCK_DATA=True`）
+
+## 运行应用
+
+启动后端服务：
+```bash
+uvicorn app.main:app --reload
+```
+
+默认情况下，服务将在 `http://127.0.0.1:8000` 上运行
+
+## API文档
+
+启动服务后，可以访问以下URL查看API文档：
+- Swagger UI: `http://127.0.0.1:8000/docs`
+- ReDoc: `http://127.0.0.1:8000/redoc`
+
+## 项目结构
+
+```
+backend/
+├── app/                    # 应用程序代码
+│   ├── api/                # API路由
+│   │   ├── endpoints/      # API端点
+│   │   └── api.py          # API路由注册
+│   ├── core/               # 核心配置
+│   │   ├── config.py       # 应用程序配置
+│   │   └── security.py     # 安全相关功能
+│   ├── db/                 # 数据库相关
+│   │   ├── init_db.py      # 数据库初始化
+│   │   └── models.py       # 数据库模型
+│   └── main.py             # 应用程序入口
+├── .env                    # 环境变量配置
+├── create_db.py            # 数据库创建脚本
+└── requirements.txt        # 依赖项
+```
 
 ## Features
 
@@ -14,20 +73,6 @@ This FastAPI-based backend serves as the primary API service for the LLM Editor 
 - **Token System**: Management of user tokens for premium features
 - **Administration**: User management and content moderation
 - **Blacklist Management**: System for managing inappropriate content
-
-## Project Structure
-
-The backend has a minimal and straightforward structure:
-
-```
-backend/
-├── main.py           # Main application file containing all routes and logic
-├── README.md         # This documentation file
-├── backend.log       # General application logs
-├── error.log         # Error logs
-├── __pycache__/      # Python cache directory
-└── venv/             # Python virtual environment
-```
 
 ## Tech Stack
 
@@ -78,32 +123,6 @@ backend/
 - `GET /admin/users`: Get all users
 - `DELETE /admin/users/{user_id}`: Delete user
 - `POST /admin/users/{user_id}/{action}`: Block/unblock user
-
-## Installation and Setup
-
-### Prerequisites
-- Python 3.8+
-- Virtual environment tool (recommended)
-
-### Installation
-
-1. Create and activate a virtual environment:
-   ```
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-2. Install dependencies:
-   ```
-   pip install fastapi uvicorn pydantic python-jose[cryptography] passlib[bcrypt] python-multipart
-   ```
-
-3. Run the server:
-   ```
-   uvicorn main:app --reload --port 8000
-   ```
-
-The API will be available at `http://localhost:8000`.
 
 ## Implementation Details
 
