@@ -6,9 +6,11 @@ from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
 from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
+from db_connector import database
 
 
 app = FastAPI()
+db = database() #instantiate an instance of our database(CB)
 
 # CORS 
 app.add_middleware(
@@ -40,7 +42,7 @@ def verify_password(plain_password, hashed_password):
 
 # authenticate user
 def authenticate_user(username: str, password: str):
-    user = fake_users_db.get(username)
+    user = db.username_exists(username) #added changed functionality here(CB)
     if not user or not verify_password(password, user["hashed_password"]):
         return None
     return user
@@ -74,7 +76,8 @@ class User(BaseModel):
     tokens: int
 
 def get_user(username: str):
-    user = fake_users_db.get(username)
+    user = fake_users_db.get(username) #look into this before you change, I think it is asking for just checking if name
+    #matches(CB)
     if user:
         return User(**user)
     return None
@@ -109,7 +112,7 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
 class TokenDeduction(BaseModel):
     amount: int
 
-@app.post("/users/deduct-tokens")
+@app.post("/users/deduct-tokens") #issue here, how does this know what current tokens is?(CB)
 async def deduct_tokens(token_data: TokenDeduction, current_user: User = Depends(get_current_user)):
     if current_user.tokens < token_data.amount:
         raise HTTPException(
@@ -117,9 +120,10 @@ async def deduct_tokens(token_data: TokenDeduction, current_user: User = Depends
             detail="Insufficient tokens"
         )
     current_user.tokens -= token_data.amount   
-    # mock database
-    fake_users_db[current_user.username]['tokens'] = current_user.tokens 
-    fake_token_db[current_user.username]['used'] = fake_token_db[current_user.username]['used'] + token_data.amount
+    #just modify the token amount in db, don't see why we would need to log the amount used(CB)
+    db.alter_tokens(current_user.username, -token_data.amount)
+    #below code is commentted out for now
+    #fake_token_db[current_user.username]['used'] = fake_token_db[current_user.username]['used'] + token_data.amount
     return {"message": "Tokens deducted successfully", "user": current_user}
 
 # buy tokens
@@ -128,7 +132,10 @@ class TokenPurchase(BaseModel):
 
 @app.post("/users/buy-tokens")
 async def buy_tokens(token_data: TokenPurchase, current_user: User = Depends(get_current_user)):
-    # 确保用户存在于token_db中
+    #check it user exists or in db(CB)
+    #unsure how to make this work with db_connector.py
+    #is it really ok that if the user is not in the database to
+    #just add them. we don't set the type of user either, or is this implicit
     if current_user.username not in fake_token_db:
         fake_token_db[current_user.username] = {
             "username": current_user.username,
@@ -137,13 +144,22 @@ async def buy_tokens(token_data: TokenPurchase, current_user: User = Depends(get
             "reward": 0,
             "used": 0
         }
+        ''' would be
+        if !(db.username_exists(current_user.username)):
+            db.register_user(current_user.username, password_data.current_password)
+            #i think this zeros everything out for tokens, etc and makes user free, need to consult
+            #person who made DB
+        
+        
+        '''
     
     # 更新用户的token数
     current_user.tokens += token_data.amount
     
-    # 更新mock数据库
-    fake_users_db[current_user.username]['tokens'] = current_user.tokens
-    fake_token_db[current_user.username]['pay'] = fake_token_db[current_user.username].get('pay', 0) + token_data.amount
+    #this is same as last function(CB)
+    db.alter_tokens(current_user.username, token_data.amount)
+    #again, I'm unsure why it is necessary to maintain the amount payed, used, etc.
+    #fake_token_db[current_user.username]['pay'] = fake_token_db[current_user.username].get('pay', 0) + token_data.amount
     
     return {"message": "Tokens bought successfully", "user": current_user}
 
@@ -154,9 +170,9 @@ class TokenReward(BaseModel):
 @app.post("/users/reward-tokens")
 async def reward_tokens(token_data: TokenReward, current_user: User = Depends(get_current_user)):
     current_user.tokens += token_data.amount
-    # mock database
-    fake_users_db[current_user.username]['tokens'] = current_user.tokens + token_data.amount
-    fake_token_db[current_user.username]['reward'] = fake_token_db[current_user.username]['reward'] + token_data.amount
+    #alter the current amount assuming before this was called current_user.token was correct(CB)
+    db.alter_tokens(current_user.username, token_data.amount)
+    #fake_token_db[current_user.username]['reward'] = fake_token_db[current_user.username]['reward'] + token_data.amount
     return {"message": "Tokens rewarded successfully", "user": current_user}    
 
 
@@ -171,7 +187,8 @@ async def change_password(
     password_data: ChangePasswordRequest, 
     current_user: User = Depends(get_current_user)
 ):
-    # 验证当前密码
+    #this I can't touch since we did not store the hashed passwords in the real DB
+    #so I am not sure how to proceed here, it could get messy if I choose to store as is(CB)
     if not verify_password(password_data.current_password, fake_users_db[current_user.username]["hashed_password"]):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -204,9 +221,10 @@ async def delete_own_account(
     # 删除用户账号
     username = current_user.username
     
-    # 从数据库中删除用户
-    del fake_users_db[username]
+    #this is the only thing necessary I think, maybe we need to delete user elsewhere aswell(CB)
+    db.delete_user(username)
     
+    """
     # 同时删除token数据
     if username in fake_token_db:
         del fake_token_db[username]
@@ -219,17 +237,19 @@ async def delete_own_account(
     for collab_username, collab_data in fake_collaborator_db.items():
         if username in collab_data["collaborators"]:
             collab_data["collaborators"].remove(username)
-    
+    """
     return {"message": "Account deleted successfully"}
 
 
-# fetch token stats
+# fetch token amount(CB)
 @app.get("/users/token-stats")
 async def fetch_token_stats(current_user: User = Depends(get_current_user)):
-    return fake_token_db[current_user.username]
+    return db.get_tokens(current_user.username)
 
 
 # fetch collaborator list
+# the following does not exist in real DB so can't really alter this
+#ill leave as is for now(CB)
 @app.get("/users/collaborator-list")
 async def fetch_collaborator_list(current_user: User = Depends(get_current_user)):
     collaborators = fake_collaborator_db[current_user.username]['collaborators']
@@ -239,6 +259,8 @@ async def fetch_collaborator_list(current_user: User = Depends(get_current_user)
 
 
 # search collaborator
+#same for this as above
+#all things pertaining to collaboration needs to be done in DB(CB)
 @app.get("/users/search-collaborator")
 async def search_collaborator(searchName: str, current_user: User = Depends(get_current_user)):
     searched_users = []
@@ -370,6 +392,8 @@ async def handle_invitation(
     return {"message": f"Invitation {action}ed successfully"}
 
 
+#same for here as collaborators, the DB for this does not exist yet so
+#no functionality can be added(CB)
 class Document(BaseModel):
     id: str
     title: str
@@ -627,8 +651,10 @@ async def fetch_blacklist_words(current_user: User = Depends(get_current_user)):
         )
     
     return {
-        "blacklist": fake_blacklist_db["words"],
-        "requests": fake_blacklist_db["requests"]
+        #returns all words not reviewed by superusers yet(CB)
+        #maybe add functionality to see all words reviewed or not
+        "unreviewed blacklist words": db.get_unreviewed_blacklist_words(),
+        #"requests": fake_blacklist_db["requests"]
     }
 
 # handle blacklist request
@@ -651,6 +677,7 @@ async def handle_blacklist_request(
         )
     
     # find request
+    #unsure how to change this to fit functionality in db_connector(CB)
     request_found = False
     for request in fake_blacklist_db["requests"]:
         if request["id"] == request_id:
@@ -709,6 +736,7 @@ async def request_blacklist_word(
         "reason": request_data.reason
     }
     
+    #this was not implemented in real DB(CB)
     fake_blacklist_db["requests"].append(new_request)
     
     return {"message": "Blacklist request submitted successfully"}
@@ -737,10 +765,11 @@ async def remove_blacklist_word(
             detail="Word is not in blacklist"
         )
     
-    # remove word from blacklist
-    fake_blacklist_db["words"].remove(word)
+    # remove word from blacklist(CB)
+    db.delete_blacklist_words(word)
     
     # update any approved requests to rejected
+    #no functionality for this in DB yet
     for request in fake_blacklist_db["requests"]:
         if request["word"] == word and request["status"] == "approved":
             request["status"] = "rejected"
@@ -765,14 +794,14 @@ async def add_blacklist_word(
     word = request_data.word
     
     # check if word is already in blacklist
-    if word in fake_blacklist_db["words"]:
+    if db.blacklist_word_exists(word):
         raise HTTPException(
             status_code=400,
             detail="Word is already in blacklist"
         )
     
-    # add word to blacklist
-    fake_blacklist_db["words"].append(word)
+    # add word to blacklist(CB)
+    db.add_blacklist_word(word)
     
     # auto-approve any pending requests for this word
     for request in fake_blacklist_db["requests"]:
@@ -794,6 +823,7 @@ async def get_complaints(
             detail="Only admin users can access this endpoint"
         )
     
+    #unsure how to change this(CB)
     if status:
         filtered_complaints = [
             complaint for complaint in fake_complaints_db["complaints"] 
@@ -1448,4 +1478,3 @@ async def submit_complaint(
     fake_complaints_db["complaints"].append(new_complaint)
     
     return {"message": "Complaint submitted successfully", "id": complaint_id}
-
