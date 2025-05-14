@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
 from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
-from db_connector import database
+from SQL_Database.db_connector import database
 
 
 app = FastAPI()
