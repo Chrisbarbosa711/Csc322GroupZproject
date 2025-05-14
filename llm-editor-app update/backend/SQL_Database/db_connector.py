@@ -3,6 +3,7 @@
 # -----------------------------------------------------------------------------------------------------
 
 import pymysql
+
 # Creating custom class for specialized connection to project specific database
 class Database:
     def __init__(self, host = '192.168.1.200', user='remote_user', password='csc322', database='word_editor', *, cursor_type=pymysql.cursors.DictCursor):
@@ -27,6 +28,15 @@ class Database:
         with self.connection.cursor() as cursor:
             cursor.execute(sql, params or ())
         self.connection.commit()
+# -----------------------------------------------------------------------------------------------------
+# Function close connection when finished with queries
+# !!!!!!!!!!!!!!! ALWAYS CLOSE CONNECTION AFTER USE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    def close(self):
+        """Close the database connection"""
+        self.connection.close()
+
+
 # -----------------------------------------------------------------------------------------------------  
 # -----------------------------------------------------------------------------------------------------
 # Defined queries for users database table
@@ -127,12 +137,6 @@ class Database:
             cursor.execute(sql)
         self.connection.commit()
         return True
-# -----------------------------------------------------------------------------------------------------
-# Function close connection when finished with queries
-
-    def close(self):
-        """Close the database connection"""
-        self.connection.close()
 
 # -----------------------------------------------------------------------------------------------------
 # -----------------------------------------------------------------------------------------------------
@@ -398,4 +402,156 @@ class Database:
         else:
             return False
 
+# -----------------------------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------------------------------
+# Defined queries for user_history table
+# -----------------------------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------------------------------
+# Add user history to the table.
+    def add_user_history(self, username, text, correction, tokens_used):
+        if self.username_exists(username):
+            sql = f"""
+            INSERT INTO user_history (username, text, correction, tokens_used)
+            VALUES ('{username}', '{text}', '{correction}', {tokens_used})
+            """
+            self.execute(sql)
+            return True
+# -----------------------------------------------------------------------------------------------------
+# Check if a particular user history exists using id history's number.
+    def user_history_exists(self, id):
+        sql = f'''
+            SELECT 
+                CASE 
+                    WHEN EXISTS (SELECT 1 FROM user_history WHERE id = '{id}') THEN 1
+                    ELSE 0
+                END AS user_history_exists;
+        '''
+        with self.connection.cursor() as cursor:
+            cursor.execute(sql)
+            return bool(cursor.fetchone()['user_history_exists'])
+        
+# -----------------------------------------------------------------------------------------------------
+# Gets a particular history using its id number.
+    def get_user_history_by_id(self, id):
+        if not self.user_history_exists(id):
+            return None
+        sql = f'''
+            SELECT *
+            FROM user_history
+            WHERE id = '{id}';
+        '''
+        with self.connection.cursor() as cursor:
+            cursor.execute(sql)
+            return cursor.fetchone()
+# -----------------------------------------------------------------------------------------------------
+# Gets all the history of a particular username.
+    def get_user_history_by_user(self, username):
+        sql = f"SELECT * FROM user_history WHERE username = '{username}'"
+        return self.query(sql)
+    
+# -----------------------------------------------------------------------------------------------------
+# Maybe unnecessary? Can't think of a use case
+# Update a particular history row in the table. Checks if the row exists first using id.
+    def update_history_content(self, id, new_text, new_correction, new_tokens_used):
+        if not self.user_history_exists(id):
+            return False
+
+        sql = f'''
+            UPDATE user_history
+            SET text = '{new_text}',
+                correction = '{new_correction}',
+                tokens_used = '{new_tokens_used}',
+                created_at = CURRENT_TIMESTAMP()
+            WHERE id = {id};
+        '''
+        with self.connection.cursor() as cursor:
+            cursor.execute(sql)
+        self.connection.commit()
+        return True
+# -----------------------------------------------------------------------------------------------------        
+# Delete a row of history using its id
+    def delete_user_history(self, id):
+        if not self.user_history_exists(id):
+            return False
+
+        sql = f'''
+            DELETE FROM user_history
+            WHERE id = '{id}';
+        '''
+        with self.connection.cursor() as cursor:
+            cursor.execute(sql)
+            self.connection.commit()
+            return True
+
+# -----------------------------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------------------------------
+# Defined queries for collaborators table
+# -----------------------------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------------------------------        
+# Add a new collaboration. 
+    def add_collaboration(self, inviter, collaborator, text, correction, received):
+        sql = f"""
+        INSERT INTO collaborators (inviter, collaborator, text, correction, received)
+        VALUES ('{inviter}', '{collaborator}', '{text}', '{correction}', {int(received)});
+        """
+        self.execute(sql)
+# -----------------------------------------------------------------------------------------------------
+# Checks that collaboration exists in table using its id.
+    def collaboration_exists(self, id):
+        sql = f'''
+            SELECT 
+                CASE 
+                    WHEN EXISTS (SELECT 1 FROM collaborators WHERE id = {id}) THEN 1
+                    ELSE 0
+                END AS collaboration_exists;
+        '''
+        with self.connection.cursor() as cursor:
+            cursor.execute(sql)
+            return bool(cursor.fetchone()['collaboration_exists'])
+# -----------------------------------------------------------------------------------------------------
+# Fetches collaboration using its id.
+    def get_collaboration_by_id(self, id):
+        if not self.collaboration_exists(id):
+            return None
+
+        sql = f'''
+            SELECT *
+            FROM collaborators
+            WHERE id = {id};
+        '''
+        with self.connection.cursor() as cursor:
+            cursor.execute(sql)
+            return cursor.fetchone()
+# -----------------------------------------------------------------------------------------------------        
+# Update collaboration details. Checks if collaboration exists in table first using id.
+    def update_collaboration(self, id, new_text, new_correction, received):
+        if not self.collaboration_exists(id):
+            return False
+
+        sql = f'''
+            UPDATE collaborators
+            SET text = '{new_text}',
+                correction = '{new_correction}',
+                received = {int(received)}
+            WHERE id = {id};
+        '''
+        with self.connection.cursor() as cursor:
+            cursor.execute(sql)
+            self.connection.commit()
+            return True
+# -----------------------------------------------------------------------------------------------------
+# Delete a collaboration from the table using id.
+    def delete_collaboration(self, id):
+        if not self.collaboration_exists(id):
+            return False
+
+        sql = f'''
+            DELETE FROM collaborators
+            WHERE id = {id};
+        '''
+        with self.connection.cursor() as cursor:
+            cursor.execute(sql)
+            self.connection.commit()
+            return True
+        
 
