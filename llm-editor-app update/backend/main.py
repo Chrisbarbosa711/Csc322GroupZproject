@@ -397,6 +397,7 @@ async def fetch_history_detail(history_id: int, current_user: User = Depends(get
 
 # LOOK AT LATER!!!! (MS)
 # 添加文档协作者API
+"""
 @app.post("/documents/{document_id}/add-collaborator")
 async def add_document_collaborator(
     document_id: str,
@@ -560,6 +561,7 @@ async def delete_document(document_id: str, current_user: User = Depends(get_cur
     # Delete the document
     del fake_document_db[document_id]
     return {"message": "Document deleted successfully"}
+"""
 
 # fetch blacklist words
 @app.get("/admin/blacklist")
@@ -578,6 +580,7 @@ async def fetch_blacklist_words(current_user: User = Depends(get_current_user)):
     }
 
 # handle blacklist request
+#SHOULD work, please work(CB)
 @app.post("/admin/blacklist/{request_id}/{action}")
 async def handle_blacklist_request(
     request_id: str, 
@@ -596,18 +599,17 @@ async def handle_blacklist_request(
             detail="Invalid action. Must be 'approve' or 'reject'"
         )
     
-    # find request
-    #unsure how to change this to fit functionality in db_connector(CB)
+    # Get all unreviewed words to find the request
+    unreviewed_words = db.get_unreviewed_blacklist_words()
     request_found = False
-    for request in fake_blacklist_db["requests"]:
-        if request["id"] == request_id:
+    word_to_process = None
+    
+    # Find the word with matching request_id (assuming request_id is the word for simplicity)
+    # You might need to adjust this if request_id is a separate field
+    for word_data in unreviewed_words:
+        if word_data['word'] == request_id:  # Adjust this if request_id is stored differently
             request_found = True
-            request["status"] = action
-            
-            # if approved, add to blacklist
-            if action == "approve" and request["word"] not in fake_blacklist_db["words"]:
-                fake_blacklist_db["words"].append(request["word"])
-            
+            word_to_process = word_data['word']
             break
     
     if not request_found:
@@ -616,50 +618,55 @@ async def handle_blacklist_request(
             detail="Request not found"
         )
     
+    # Process the action
+    if action == "approve":
+        # Mark as reviewed and approved
+        db.blacklist_alter_reviewed(word_to_process, reviewed=1)
+    elif action == "reject":
+        # Remove the word from blacklist
+        db.delete_blacklist_word(word_to_process)
+    
     return {"message": f"Request {action}d successfully"}
 
 # DELETE? (MS)
 # user submit blacklist request
 class BlacklistRequest(BaseModel):
     word: str
-    reason: str
+    #reason: str 
+    #no place in database for this 
 
 @app.post("/users/request-blacklist")
 async def request_blacklist_word(
     request_data: BlacklistRequest, 
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    # check if word is already in blacklist
-    if request_data.word in fake_blacklist_db["words"]:
+    # Check if word is already in blacklist (approved)
+    if db.blacklist_word_exists(request_data.word):
         raise HTTPException(
             status_code=400,
             detail="Word is already blacklisted"
         )
     
-    # check if there is already a pending request
-    for request in fake_blacklist_db["requests"]:
-        if request["word"] == request_data.word and request["status"] == "pending":
+    # Check if there's already a pending request (unreviewed entry)
+    unreviewed_words = db.get_unreviewed_blacklist_words()
+    for word_data in unreviewed_words:
+        if word_data['word'] == request_data.word:
             raise HTTPException(
                 status_code=400,
                 detail="There is already a pending request for this word"
             )
     
-    # generate unique ID
-    request_id = str(len(fake_blacklist_db["requests"]) + 1)
+    # Add new word to blacklist table with super_user_reviewed=0 (pending)
+    success = db.add_blacklist_word(request_data.word)
     
-    # create new request
-    new_request = {
-        "id": request_id,
-        "word": request_data.word,
-        "requestedBy": current_user.username,
-        "status": "pending",
-        "requestDate": datetime.now().strftime("%Y-%m-%d"),
-        "reason": request_data.reason
-    }
+    if not success:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to submit blacklist request"
+        )
     
-    #this was not implemented in real DB(CB)
-    fake_blacklist_db["requests"].append(new_request)
-    
+    # Note: If we need to store additional reason for request
+    #I dont think that is necessary tho(CB)
     return {"message": "Blacklist request submitted successfully"}
 
 # DELETE? (MS)
@@ -681,7 +688,7 @@ async def remove_blacklist_word(
     word = request_data.word
     
     # check if word is in blacklist
-    if word not in fake_blacklist_db["words"]:
+    if not db.blacklist_word_exists[word]:
         raise HTTPException(
             status_code=404,
             detail="Word is not in blacklist"
@@ -691,11 +698,12 @@ async def remove_blacklist_word(
     db.delete_blacklist_words(word)
     
     # update any approved requests to rejected
-    #no functionality for this in DB yet
+    #no need to do this
+    """
     for request in fake_blacklist_db["requests"]:
         if request["word"] == word and request["status"] == "approved":
             request["status"] = "rejected"
-    
+    """
     return {"message": f"Word '{word}' removed from blacklist successfully"}
 
 # DELETE? (MS)
@@ -726,11 +734,12 @@ async def add_blacklist_word(
     # add word to blacklist(CB)
     db.add_blacklist_word(word)
     
-    # auto-approve any pending requests for this word
+    # unnescessary since "requests" in our case is the super_user_reviewed column
+    """
     for request in fake_blacklist_db["requests"]:
         if request["word"] == word and request["status"] == "pending":
             request["status"] = "approved"
-    
+    """
     return {"message": f"Word '{word}' added to blacklist successfully"}
 
 
@@ -788,27 +797,27 @@ async def handle_complaint(
             status_code=404,
             detail="Complaint not found"
         )
-        # Update complaint status based on action
+    
+    # Update complaint status based on action
     reviewed_status = 1 if action == "approve" else 0
     db.complaints_alter_reviewed(complaint_id, reviewed_status)
     
-            # If approved and penalties are applied
-            if action == "approve" and data.penalty:
-                complaint_details = db.query(f"SELECT reportee FROM complaints WHERE id = {complaint_id}")[0]
-                collaborator = complaint_details['reportee']
+    #If approved and penalties are applied
+    if action == "approve" and data.penalty:
+        complaint_details = db.query(f"SELECT reportee FROM complaints WHERE id = {complaint_id}")[0]
+        collaborator = complaint_details['reportee']
                 
-                # Apply block if needed
-                #not sure if this will even work, need to try out and/or just comment out(CB)
-                if data.penalty.get("block"):
-                    print(f"Blocked user {collaborator} for 14 days")
+        # Apply block if needed
+        #not sure if this will even work, need to try out and/or just comment out(CB)
+        if data.penalty.get("block"):
+            print(f"Blocked user {collaborator} for 14 days")
                 
-                # Deduct tokens if needed
-                if tokens_to_deduct := data.penalty.get("deductTokens", 0):
-                    user = db.get_user(collaborator)
-                    if user:
-                        db.alter_tokens(collaborator, -tokens_to_deduct)
-                        print(f"Deducted {tokens_to_deduct} tokens from {collaborator}")
-            break
+            # Deduct tokens if needed
+            if tokens_to_deduct := data.penalty.get("deductTokens", 0):
+                user = db.get_user(collaborator)
+                if user:
+                    db.alter_tokens(collaborator, -tokens_to_deduct)
+                    print(f"Deducted {tokens_to_deduct} tokens from {collaborator}")
     
     if not complaint_found:
         raise HTTPException(
@@ -820,6 +829,7 @@ async def handle_complaint(
 
 # Get incorrection suggestions
 #no place in the DB to work with suggestions, so we need to either do that or comment this out(CB)
+"""
 @app.get("/admin/suggestions")
 async def get_suggestions(
     status: str = None,
@@ -878,7 +888,7 @@ async def handle_suggestion(
         )
     
     return {"message": f"Suggestion {action}d successfully"}
-
+"""
 
 # 获取所有用户列表的API端点
 #converted to current DB, need to test functionality(CB)
@@ -894,9 +904,8 @@ async def get_all_users(
             detail="Only admin users can access this endpoint"
         )
     
-    try:
         # Get all users from database
-        users = db.query("SELECT id, username, email, user_type as role, tokens, status FROM users")
+        users = db.get_user("SELECT id, username, email, user_type as role, tokens, status FROM users")
         
         # Process user list
         users_list = []
@@ -904,8 +913,7 @@ async def get_all_users(
             user = {
                 "id": user_data["id"],
                 "username": user_data["username"],
-                "email": user_data["email"],
-                "role": user_data["role"],
+                "role": user_data["user_type"],
                 "tokens": user_data["tokens"]
             }
             users_list.append(user)
@@ -936,7 +944,6 @@ async def delete_user(
             detail="Only admin users can access this endpoint"
         )
     
-   try:
         # Get user to be deleted
         user_to_delete = db.query("SELECT username FROM users WHERE id = %s", (user_id,))
         
@@ -974,6 +981,7 @@ async def delete_user(
 #this was not implemented in the DB currently
 #should try to comment out or implement if possible(CB)
 # 封禁或解封用户
+"""
 @app.post("/admin/users/{user_id}/{action}")
 async def block_or_unblock_user(
     user_id: int,
@@ -1022,7 +1030,7 @@ async def block_or_unblock_user(
             status_code=404,
             detail=f"User with ID {user_id} not found"
         )
-
+"""
 # DELETE? (MS)
 #need to test but is converted to the current DB(CB)
 # 用户提交协作者投诉
@@ -1054,4 +1062,6 @@ async def submit_complaint(
         reason=complaint_data.reason
     )
     
-    return {"message": "Complaint submitted successfully", "id": complaint_id}
+    #got rid of id stuff, could bring back(CB)
+    #return {"message": "Complaint submitted successfully", "id": complaint_id}
+    return {"message": "Complaint submitted successfully"}
