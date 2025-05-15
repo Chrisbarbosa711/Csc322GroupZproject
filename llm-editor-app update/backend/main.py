@@ -224,6 +224,7 @@ async def fetch_token_stats(current_user: User = Depends(get_current_user)):
 # fetch collaborator list
 # the following does not exist in real DB so can't really alter this
 #ill leave as is for now(CB)
+"""
 @app.get("/users/collaborator-list")
 async def fetch_collaborator_list(current_user: User = Depends(get_current_user)):
     collaborators = fake_collaborator_db[current_user.username]['collaborators']
@@ -252,7 +253,7 @@ async def search_collaborator(searchName: str, current_user: User = Depends(get_
             searched_users.append(user_info)
     
     return {"searched_user": searched_users}
-
+"""
 # GOOD! (MS)
 # 邀请协作者请求模型
 class InviteRequest(BaseModel):
