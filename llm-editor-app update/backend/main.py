@@ -55,7 +55,7 @@ class LoginRequest(BaseModel):
     username: str
     password: str
 
-# login
+# POST - /auth/login
 @app.post("/auth/login")
 async def login(form_data: LoginRequest):
     user = authenticate_user(form_data.username, form_data.password)
@@ -68,6 +68,7 @@ async def login(form_data: LoginRequest):
     return {"token": access_token}
 
 
+# NOT SURE IF I CAN DELETE THIS (MS)
 class User(BaseModel):
     id: int
     username: str
@@ -88,7 +89,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
-        user = get_user(username)
+        user = db.get_user(username)
         if user is None:
             raise credentials_exception
         return user
