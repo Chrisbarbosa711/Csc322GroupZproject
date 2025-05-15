@@ -75,8 +75,7 @@ async def login(form_data: LoginRequest):
 class User(BaseModel):
     id: int
     username: str
-    email: Optional[str] = None
-    role: str
+    user_type: str
     tokens: int
 
 
