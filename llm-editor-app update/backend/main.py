@@ -37,16 +37,17 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-# DELETE? (MS)
+# GOOD! (MS)
 # verify password
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+def verify_password(plain_password: str, stored_password: str) -> bool:
+    return plain_password == stored_password
+
 
 # GOOD! (MS)
 # authenticate user
 def authenticate_user(username: str, password: str):
-    user = db.username_exists(username) #added changed functionality here(CB)
-    if not user or not verify_password(password, user["hashed_password"]):
+    user = db.get_user(username)  # Fetch full user record
+    if not user or not verify_password(password, user["password"]):
         return None
     return user
 
