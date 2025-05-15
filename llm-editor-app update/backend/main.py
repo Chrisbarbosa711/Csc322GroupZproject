@@ -1065,3 +1065,6 @@ async def submit_complaint(
     #got rid of id stuff, could bring back(CB)
     #return {"message": "Complaint submitted successfully", "id": complaint_id}
     return {"message": "Complaint submitted successfully"}
+
+
+db.close()
