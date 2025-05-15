@@ -21,14 +21,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# DELETE? (MS)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-
+# DELETE? (MS)
 SECRET_KEY = "your-super-secret-key"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
-
+# DELETE? (MS)
 # create token
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
@@ -36,10 +37,12 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
+# DELETE? (MS)
 # verify password
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
+# DELETE? (MS)
 # authenticate user
 def authenticate_user(username: str, password: str):
     user = db.username_exists(username) #added changed functionality here(CB)
@@ -47,9 +50,11 @@ def authenticate_user(username: str, password: str):
         return None
     return user
 
+# DELETE? (MS)
 # OAuth2
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
+# DELETE? (MS)
 # login request
 class LoginRequest(BaseModel):
     username: str
@@ -68,7 +73,7 @@ async def login(form_data: LoginRequest):
     return {"token": access_token}
 
 
-# NOT SURE IF I CAN DELETE THIS (MS)
+# DELETE? (MS)
 class User(BaseModel):
     id: int
     username: str
@@ -102,7 +107,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
 async def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
 
-
+# DELETE? (MS)
 # deduct tokens
 class TokenDeduction(BaseModel):
     amount: int
@@ -121,6 +126,7 @@ async def deduct_tokens(token_data: TokenDeduction, current_user: User = Depends
     #fake_token_db[current_user.username]['used'] = fake_token_db[current_user.username]['used'] + token_data.amount
     return {"message": "Tokens deducted successfully", "user": current_user}
 
+# DELETE? (MS)
 # buy tokens
 class TokenPurchase(BaseModel):
     amount: int
@@ -158,6 +164,7 @@ async def buy_tokens(token_data: TokenPurchase, current_user: User = Depends(get
     
     return {"message": "Tokens bought successfully", "user": current_user}
 
+# DELETE? (MS)
 # reward tokens
 class TokenReward(BaseModel):
     amount: int
@@ -170,7 +177,7 @@ async def reward_tokens(token_data: TokenReward, current_user: User = Depends(ge
     #fake_token_db[current_user.username]['reward'] = fake_token_db[current_user.username]['reward'] + token_data.amount
     return {"message": "Tokens rewarded successfully", "user": current_user}    
 
-
+# DELETE? (MS)
 # 修改密码请求
 class ChangePasswordRequest(BaseModel):
     current_password: str
@@ -196,7 +203,7 @@ async def change_password(
     
     return {"message": "Password updated successfully"}
 
-
+# DELETE? (MS)
 # 删除自己的账号
 class DeleteAccountRequest(BaseModel):
     password: str
@@ -274,11 +281,12 @@ async def search_collaborator(searchName: str, current_user: User = Depends(get_
     
     return {"searched_user": searched_users}
 
-
+# DELETE? (MS)
 # 邀请协作者请求模型
 class InviteRequest(BaseModel):
     inviteUsername: str
 
+# DELETE? (MS)
 # 模拟邀请数据库
 fake_invitation_db = {
     "invitations": []
@@ -386,7 +394,7 @@ async def handle_invitation(
     
     return {"message": f"Invitation {action}ed successfully"}
 
-
+# DELETE? (MS)
 #same for here as collaborators, the DB for this does not exist yet so
 #no functionality can be added(CB)
 class Document(BaseModel):
@@ -396,6 +404,7 @@ class Document(BaseModel):
     content: str
     wordCount: int
 
+# DELETE? (MS)
 # 文档协作者关联表 - 弱实体关系
 fake_document_collaborators_db = {
     "1": ["paid_user2", "paid_user3"],  # document 1 的协作者
@@ -693,6 +702,7 @@ async def handle_blacklist_request(
     
     return {"message": f"Request {action}d successfully"}
 
+# DELETE? (MS)
 # user submit blacklist request
 class BlacklistRequest(BaseModel):
     word: str
@@ -736,6 +746,7 @@ async def request_blacklist_word(
     
     return {"message": "Blacklist request submitted successfully"}
 
+# DELETE? (MS)
 # remove word from blacklist
 class RemoveBlacklistWord(BaseModel):
     word: str
@@ -771,6 +782,7 @@ async def remove_blacklist_word(
     
     return {"message": f"Word '{word}' removed from blacklist successfully"}
 
+# DELETE? (MS)
 # add word to blacklist
 class AddBlacklistWord(BaseModel):
     word: str
@@ -828,6 +840,7 @@ async def get_complaints(
     else:
         return {"complaints": fake_complaints_db["complaints"]}
 
+# DELETE? (MS)
 # Handle complaint
 class ComplaintAction(BaseModel):
     response: str
@@ -1078,6 +1091,7 @@ async def block_or_unblock_user(
             detail=f"User with ID {user_id} not found"
         )
 
+# DELETE? (MS)
 # 用户提交协作者投诉
 class ComplaintSubmission(BaseModel):
     collaborator: str
