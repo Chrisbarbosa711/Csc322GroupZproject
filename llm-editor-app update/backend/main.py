@@ -71,7 +71,7 @@ async def login(form_data: LoginRequest):
     return {"token": access_token}
 
 
-# DELETE? (MS)
+# GOOD! (MS)
 class User(BaseModel):
     id: int
     username: str
