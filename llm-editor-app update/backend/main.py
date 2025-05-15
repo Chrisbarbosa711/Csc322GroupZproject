@@ -375,42 +375,27 @@ async def fetch_user_history(
 
 
 
+# GOOD! (MS)
 # 修改文档详情API，添加协作者信息
-@app.get("/documents/detail/{document_id}")
-async def fetch_document_detail(document_id: str, current_user: User = Depends(get_current_user)):
-    # 检查文档是否存在
-    if document_id not in fake_document_db:
-        raise HTTPException(status_code=404, detail="Document not found")
+@app.get("/history/detail/{history_id}")
+async def fetch_history_detail(history_id: int, current_user: User = Depends(get_current_user)):
+    # Fetch the history entry from the real database
+    history_entry = db.get_user_history_by_id(history_id)
     
-    # 检查用户是否有权限访问该文档
-    document = fake_document_db[document_id]
-    is_owner = document["user"] == current_user.username
-    is_collaborator = document_id in fake_document_collaborators_db and current_user.username in fake_document_collaborators_db[document_id]
-    
-    if not (is_owner or is_collaborator):
-        raise HTTPException(status_code=403, detail="You don't have permission to access this document")
-    
-    # 获取文档的协作者列表
-    collaborators = []
-    if document_id in fake_document_collaborators_db:
-        for collaborator_username in fake_document_collaborators_db[document_id]:
-            if collaborator_username in fake_users_db:
-                collaborator_info = {
-                    "id": fake_users_db[collaborator_username]["id"],
-                    "username": collaborator_username,
-                    "email": fake_users_db[collaborator_username]["email"]
-                }
-                collaborators.append(collaborator_info)
-    
-    # 返回文档详情和协作者列表
-    result = {
-        "document": document,
-        "is_owner": is_owner,
-        "collaborators": collaborators
-    }
-    
-    return result
+    if not history_entry:
+        raise HTTPException(status_code=404, detail="History entry not found")
 
+    # Check if the current user owns this history entry
+    if history_entry["username"] != current_user.username:
+        raise HTTPException(status_code=403, detail="You don't have permission to access this history entry")
+    
+    return {
+        "history": history_entry,
+        "is_owner": True  # Always true since we only allow access to own entries
+    }
+
+
+# LOOK AT LATER!!!! (MS)
 # 添加文档协作者API
 @app.post("/documents/{document_id}/add-collaborator")
 async def add_document_collaborator(
@@ -444,6 +429,8 @@ async def add_document_collaborator(
     
     return {"message": f"{collaborator_username} added as collaborator successfully"}
 
+
+### LOOK AT LATER!!! (MS)
 # 删除文档协作者API
 @app.post("/documents/{document_id}/remove-collaborator")
 async def remove_document_collaborator(
@@ -473,6 +460,8 @@ async def remove_document_collaborator(
     
     return {"message": f"{collaborator_username} removed as collaborator successfully"}
 
+
+### LOOK AT LATER!!! (MS)
 # 更新文档协作者列表API
 @app.get("/documents/{document_id}/collaborators")
 async def get_document_collaborators(
@@ -504,6 +493,7 @@ async def get_document_collaborators(
                 collaborators.append(collaborator_info)
     
     return {"collaborators": collaborators, "is_owner": is_owner}
+
 
 # fetch document stats
 @app.get("/documents/stats")
