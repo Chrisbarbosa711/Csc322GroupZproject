@@ -42,10 +42,10 @@ class Database:
 # Defined queries for users database table
 # -----------------------------------------------------------------------------------------------------
 # -----------------------------------------------------------------------------------------------------
-# Returns information like id, username, email, user_type, role, and token by username 
+# Returns information like id, username, email, user_type, and token by username search 
     def get_user(self, username):
         sql = """
-        SELECT id, username, user_type AS role, tokens
+        SELECT id, username, user_type, tokens
         FROM users
         WHERE username = %s
         """
