@@ -735,6 +735,7 @@ async def add_blacklist_word(
 
 
 # Get complaints
+#switch over to correct DB, needs to be tested(CB)
 @app.get("/admin/complaints")
 async def get_complaints(
     status: str = None,
@@ -755,6 +756,7 @@ async def get_complaints(
 
 # DELETE? (MS)
 # Handle complaint
+#functionality switched over to current DB, need to test(CB)
 class ComplaintAction(BaseModel):
     response: str
     penalty: dict
@@ -796,6 +798,7 @@ async def handle_complaint(
                 collaborator = complaint_details['reportee']
                 
                 # Apply block if needed
+                #not sure if this will even work, need to try out and/or just comment out(CB)
                 if data.penalty.get("block"):
                     print(f"Blocked user {collaborator} for 14 days")
                 
@@ -816,6 +819,7 @@ async def handle_complaint(
     return {"message": f"Complaint {action}d successfully"}
 
 # Get incorrection suggestions
+#no place in the DB to work with suggestions, so we need to either do that or comment this out(CB)
 @app.get("/admin/suggestions")
 async def get_suggestions(
     status: str = None,
@@ -877,6 +881,7 @@ async def handle_suggestion(
 
 
 # 获取所有用户列表的API端点
+#converted to current DB, need to test functionality(CB)
 @app.get("/admin/users")
 async def get_all_users(
     page: int = 1,
@@ -889,20 +894,21 @@ async def get_all_users(
             detail="Only admin users can access this endpoint"
         )
     
-    # 处理用户列表
-    users_list = []
-    for username, user_data in fake_users_db.items():
-        # 添加额外的用户属性
-        user = {
-            "id": user_data["id"],
-            "username": username,
-            "email": user_data["email"],
-            "role": user_data["role"],
-            "tokens": user_data["tokens"],
-            "status": user_data["status"],
-            "lastActive": datetime.now().isoformat()  # 模拟最后活跃时间
-        }
-        users_list.append(user)
+    try:
+        # Get all users from database
+        users = db.query("SELECT id, username, email, user_type as role, tokens, status FROM users")
+        
+        # Process user list
+        users_list = []
+        for user_data in users:
+            user = {
+                "id": user_data["id"],
+                "username": user_data["username"],
+                "email": user_data["email"],
+                "role": user_data["role"],
+                "tokens": user_data["tokens"]
+            }
+            users_list.append(user)
     
     # 简单分页
     start_index = (page - 1) * limit
@@ -918,6 +924,7 @@ async def get_all_users(
     }
 
 # 删除用户API端点
+#converted to current DB(CB) need to test functionality
 @app.delete("/admin/users/{user_id}")
 async def delete_user(
     user_id: int,
@@ -929,28 +936,33 @@ async def delete_user(
             detail="Only admin users can access this endpoint"
         )
     
-    # 在真实应用中，这里应该寻找并删除指定ID的用户
-    # 在此模拟删除操作
-    for username, user_data in list(fake_users_db.items()):
-        if user_data["id"] == user_id:
-            # 确保管理员不能删除自己
-            if username == current_user.username:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Cannot delete your own account"
-                )
-            # 从假数据库中删除用户
-            del fake_users_db[username]
-            # 同时删除token数据
-            if username in fake_token_db:
-                del fake_token_db[username]
-            # 同时删除协作者数据
-            if username in fake_collaborator_db:
-                del fake_collaborator_db[username]
-            # 对于每个用户的协作者列表，移除被删除的用户
-            for collab_username, collab_data in fake_collaborator_db.items():
-                if username in collab_data["collaborators"]:
-                    collab_data["collaborators"].remove(username)
+   try:
+        # Get user to be deleted
+        user_to_delete = db.query("SELECT username FROM users WHERE id = %s", (user_id,))
+        
+        if not user_to_delete:
+            raise HTTPException(
+                status_code=404,
+                detail=f"User with ID {user_id} not found"
+            )
+            
+        username = user_to_delete[0]["username"]
+        
+        # Ensure admin can't delete themselves
+        if username == current_user.username:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot delete your own account"
+            )
+            
+        # Delete user from database
+        success = db.delete_user(username)
+        
+        if not success:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to delete user"
+            )
             return {"message": f"User {username} deleted successfully"}
     
     # 如果没有找到指定ID的用户
@@ -959,6 +971,8 @@ async def delete_user(
         detail=f"User with ID {user_id} not found"
     )
 
+#this was not implemented in the DB currently
+#should try to comment out or implement if possible(CB)
 # 封禁或解封用户
 @app.post("/admin/users/{user_id}/{action}")
 async def block_or_unblock_user(
@@ -1010,6 +1024,7 @@ async def block_or_unblock_user(
         )
 
 # DELETE? (MS)
+#need to test but is converted to the current DB(CB)
 # 用户提交协作者投诉
 class ComplaintSubmission(BaseModel):
     collaborator: str
