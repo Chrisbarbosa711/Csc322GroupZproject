@@ -22,9 +22,6 @@ app.add_middleware(
 )
 
 # DELETE? (MS)
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-# DELETE? (MS)
 SECRET_KEY = "your-super-secret-key"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
@@ -41,7 +38,6 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
 # verify password
 def verify_password(plain_password: str, stored_password: str) -> bool:
     return plain_password == stored_password
-
 
 # GOOD! (MS)
 # authenticate user
