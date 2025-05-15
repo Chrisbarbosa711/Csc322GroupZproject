@@ -510,22 +510,15 @@ async def fetch_document_stats(current_user: User = Depends(get_current_user)):
             stats["total_documents"] += 1
     return {"stats": stats}
 
-# save document
+"""
+# save document is updated, not sure how to deal with file path, for now save as same as file name(CB)
 @app.post("/documents")
 async def save_document(document: Document, current_user: User = Depends(get_current_user)):
-    document_info = {
-        "id": document.id,
-        "title": document.title,
-        "latest_update": document.date,
-        "created_date": document.date,
-        "word_count": document.wordCount,
-        "preview": document.content[:20] + "...",
-        "content": document.content,
-        "user": current_user.username
-    }
-    fake_document_db[document.id] = document_info
-    return {"message": "Document saved successfully", "user": current_user}
 
+    file = db.add_user_file(current_user.username, Document, Document)
+    return {"message": "Document saved successfully", "user": current_user}
+    
+"""
 # update document
 @app.put("/documents/{document_id}")
 async def update_document(document_id: str, document: Document, current_user: User = Depends(get_current_user)):
@@ -542,27 +535,28 @@ async def update_document(document_id: str, document: Document, current_user: Us
     }
     fake_document_db[document_id] = document_info
     return {"message": "Document updated successfully", "document": document_info}
-
+"""
 # delete document
 @app.delete("/documents/{document_id}")
 async def delete_document(document_id: str, current_user: User = Depends(get_current_user)):
-    if document_id not in fake_document_db:
+    if not db.check_user_file_exists(current_user.username, Document_id):
         raise HTTPException(
             status_code=404,
             detail="Document not found"
         )
     
-    # Check if the user owns the document
+    # Check if the user owns the document, try to do later
+    """
     if fake_document_db[document_id]["user"] != current_user.username:
         raise HTTPException(
             status_code=403,
             detail="You don't have permission to delete this document"
         )
-    
+    """
     # Delete the document
-    del fake_document_db[document_id]
+    db.delete_user_file(current_user.username, Document_id);
     return {"message": "Document deleted successfully"}
-"""
+
 
 # fetch blacklist words
 @app.get("/admin/blacklist")
