@@ -747,14 +747,11 @@ async def get_complaints(
         )
     
     #unsure how to change this(CB)
-    if status:
-        filtered_complaints = [
-            complaint for complaint in fake_complaints_db["complaints"] 
-            if complaint["status"] == status
-        ]
-        return {"complaints": filtered_complaints}
+    if status == "unreviewed":
+        return {"complaints": db.get_unreviewed_complaints()}
     else:
-        return {"complaints": fake_complaints_db["complaints"]}
+        # Get all complaints (note: need to implement this in db_connector)
+        return {"complaints": db.query("SELECT * FROM complaints")}
 
 # DELETE? (MS)
 # Handle complaint
@@ -783,15 +780,20 @@ async def handle_complaint(
     
     # Find complaint
     complaint_found = False
-    for complaint in fake_complaints_db["complaints"]:
-        if complaint["id"] == complaint_id:
-            complaint_found = True
-            complaint["status"] = "resolved" if action == "approve" else "rejected"
-            complaint["adminResponse"] = data.response
-            
+   # Check if complaint exists
+    if not db.complaint_exists(complaint_id):
+        raise HTTPException(
+            status_code=404,
+            detail="Complaint not found"
+        )
+        # Update complaint status based on action
+    reviewed_status = 1 if action == "approve" else 0
+    db.complaints_alter_reviewed(complaint_id, reviewed_status)
+    
             # If approved and penalties are applied
             if action == "approve" and data.penalty:
-                collaborator = complaint["collaborator"]
+                complaint_details = db.query(f"SELECT reportee FROM complaints WHERE id = {complaint_id}")[0]
+                collaborator = complaint_details['reportee']
                 
                 # Apply block if needed
                 if data.penalty.get("block"):
@@ -799,9 +801,9 @@ async def handle_complaint(
                 
                 # Deduct tokens if needed
                 if tokens_to_deduct := data.penalty.get("deductTokens", 0):
-                    user = fake_users_db.get(collaborator)
+                    user = db.get_user(collaborator)
                     if user:
-                        user['tokens'] = max(0, user['tokens'] - tokens_to_deduct)
+                        db.alter_tokens(collaborator, -tokens_to_deduct)
                         print(f"Deducted {tokens_to_deduct} tokens from {collaborator}")
             break
     
