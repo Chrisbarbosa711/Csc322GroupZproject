@@ -42,7 +42,7 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
-# DELETE? (MS)
+# GOOD! (MS)
 # authenticate user
 def authenticate_user(username: str, password: str):
     user = db.username_exists(username) #added changed functionality here(CB)
