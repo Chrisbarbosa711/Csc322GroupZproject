@@ -42,29 +42,6 @@ class Database:
 # Defined queries for users database table
 # -----------------------------------------------------------------------------------------------------
 # -----------------------------------------------------------------------------------------------------
-# Returns information like id, username, email, user_type, and token by username search 
-    def get_user(self, username):
-        sql = """
-        SELECT id, username, user_type, tokens
-        FROM users
-        WHERE username = %s
-        """
-        with self.connection.cursor() as cursor:
-            cursor.execute(sql, (username,))
-            return cursor.fetchone()
-# -----------------------------------------------------------------------------------------------------
-# Used for updating password 
-    def update_password(self, username, new_password):
-        sql = """
-        UPDATE users
-        SET password = %s
-        WHERE username = %s
-        """
-        with self.connection.cursor() as cursor:
-            cursor.execute(sql, (new_password, username))
-        self.connection.commit()
-        return True
-# -----------------------------------------------------------------------------------------------------
 # Check if username is already in database, returns 'True' or 'False'
     def username_exists(self, existing_user):
         sql = f'''
@@ -210,17 +187,6 @@ class Database:
             SELECT *
             FROM blacklist
             WHERE super_user_reviewed = 0
-        '''
-        with self.connection.cursor() as cursor:
-            cursor.execute(sql)
-            return cursor.fetchall()
-# -----------------------------------------------------------------------------------------------------
-# Check for reviewed blacklist words. Return all rows of data. for completeness so we can print the whole list
-    def get_unreviewed_blacklist_words(self):
-        sql = f'''
-            SELECT *
-            FROM blacklist
-            WHERE super_user_reviewed = 1
         '''
         with self.connection.cursor() as cursor:
             cursor.execute(sql)
@@ -588,4 +554,72 @@ class Database:
             self.connection.commit()
             return True
         
+# -----------------------------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------------------------------
+# Defined queries for user_files table
+# -----------------------------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------------------------------
+# Add a user's file to the table, requires file path as input. Function will convert file to binary for sql storage.
+    def add_user_file(self, username, file_name, file_path):
+        # Add new doc to user_doc table
+            with open(file_path, 'rb') as file:
+                file_data = file.read()
+            sql = """
+                INSERT INTO user_files (username, file_name, file_data)
+                VALUES (%s, %s, %s)
+                """
+            with self.connection.cursor() as cursor:
+                cursor.execute(sql, (username, file_name, file_data))
+            self.connection.commit()
+            return True
+# -----------------------------------------------------------------------------------------------------
+# Check if user's file exists in table based on username and file name.
+    def check_user_file_exists(self, username, file_name):
+        sql = f'''
+            SELECT 
+                CASE 
+                    WHEN EXISTS (SELECT 1 FROM user_files WHERE username = '{username}' AND file_name = '{file_name}') THEN 1
+                    ELSE 0
+                END AS file_exists;
+        '''
+        with self.connection.cursor() as cursor:
+            cursor.execute(sql)
+        return bool(cursor.fetchone()['file_exists'])
+# -----------------------------------------------------------------------------------------------------
+# Delete user's file from table using username and file name, checks if it exists first.
+    def delete_user_file(self, username, file_name):
+        if not self.check_user_file_exists(username,file_name):
+            return False
 
+        sql = f'''
+            DELETE FROM user_files
+            WHERE username = '{username}' AND file_name = '{file_name}';
+        '''
+        with self.connection.cursor() as cursor:
+            cursor.execute(sql)
+        self.connection.commit()
+        return True
+# -----------------------------------------------------------------------------------------------------
+# Get user's file using username and file name. SQL returns it as binary data. Use function in comment below in backend to save data as a file.        
+    def get_user_file(self, username, file_name):
+        sql = """
+            SELECT file_data
+            FROM user_files
+            WHERE username = %s AND file_name = %s
+            """
+        with self.connection.cursor() as cursor:
+            cursor.execute(sql, (username, file_name))
+            result = cursor.fetchone()
+            if result:
+                return result['file_data']  # This is the binary file_data
+            else:
+                return None
+
+# How to save return binary data to file: impliment below in backend
+#
+#file_data = your_class_instance.get_user_file('john_doe', 'report.pdf')
+#if file_data:
+#    with open('downloaded_report.pdf', 'wb') as f:
+#        f.write(file_data)
+#
