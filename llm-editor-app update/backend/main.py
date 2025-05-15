@@ -57,6 +57,7 @@ class LoginRequest(BaseModel):
     username: str
     password: str
 
+# GOOD! (MS)
 # POST - /auth/login
 @app.post("/auth/login")
 async def login(form_data: LoginRequest):
