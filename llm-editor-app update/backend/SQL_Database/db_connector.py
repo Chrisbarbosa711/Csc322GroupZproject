@@ -45,7 +45,7 @@ class Database:
 # Returns information like id, username, email, user_type, role, and token by username 
     def get_user(self, username):
         sql = """
-        SELECT id, username, email, user_type AS role, tokens
+        SELECT id, username, user_type AS role, tokens
         FROM users
         WHERE username = %s
         """
