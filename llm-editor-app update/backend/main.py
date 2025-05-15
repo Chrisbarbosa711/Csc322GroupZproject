@@ -6,11 +6,11 @@ from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
 from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
-from SQL_Database.db_connector import database
+from SQL_Database.db_connector import Database
 
 
 app = FastAPI()
-db = database() #instantiate an instance of our database(CB)
+db = Database() #instantiate an instance of our database(CB)
 
 # CORS 
 app.add_middleware(
@@ -75,12 +75,6 @@ class User(BaseModel):
     role: str
     tokens: int
 
-def get_user(username: str):
-    user = fake_users_db.get(username) #look into this before you change, I think it is asking for just checking if name
-    #matches(CB)
-    if user:
-        return User(**user)
-    return None
 
 # get current user
 def get_current_user(token: str = Depends(oauth2_scheme)):

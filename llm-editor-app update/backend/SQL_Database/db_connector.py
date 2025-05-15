@@ -42,6 +42,17 @@ class Database:
 # Defined queries for users database table
 # -----------------------------------------------------------------------------------------------------
 # -----------------------------------------------------------------------------------------------------
+# Returns information like id, username, email, user_type, role, and token by username 
+    def get_user(self, username):
+        sql = """
+        SELECT id, username, email, user_type AS role, tokens
+        FROM users
+        WHERE username = %s
+        """
+        with self.connection.cursor() as cursor:
+            cursor.execute(sql, (username,))
+            return cursor.fetchone()
+# -----------------------------------------------------------------------------------------------------
 # Check if username is already in database, returns 'True' or 'False'
     def username_exists(self, existing_user):
         sql = f'''
