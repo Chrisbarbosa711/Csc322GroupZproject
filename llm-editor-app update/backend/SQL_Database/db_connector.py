@@ -53,6 +53,18 @@ class Database:
             cursor.execute(sql, (username,))
             return cursor.fetchone()
 # -----------------------------------------------------------------------------------------------------
+# Used for updating password 
+    def update_password(self, username, new_password):
+        sql = """
+        UPDATE users
+        SET password = %s
+        WHERE username = %s
+        """
+        with self.connection.cursor() as cursor:
+            cursor.execute(sql, (new_password, username))
+        self.connection.commit()
+        return True
+# -----------------------------------------------------------------------------------------------------
 # Check if username is already in database, returns 'True' or 'False'
     def username_exists(self, existing_user):
         sql = f'''

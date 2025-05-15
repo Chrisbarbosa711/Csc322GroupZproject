@@ -78,7 +78,7 @@ class User(BaseModel):
     user_type: str
     tokens: int
 
-
+# GOOD! (MS)
 # get current user
 def get_current_user(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
@@ -99,69 +99,56 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         raise credentials_exception
     
 
+# GOOD! (MS)
 # read user info
 @app.get("/auth/me")
 async def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
 
-# DELETE? (MS)
+# GOOD! (MS)
 # deduct tokens
 class TokenDeduction(BaseModel):
     amount: int
 
-@app.post("/users/deduct-tokens") #issue here, how does this know what current tokens is?(CB)
+# GOOD! (MS)
+@app.post("/users/deduct-tokens")
 async def deduct_tokens(token_data: TokenDeduction, current_user: User = Depends(get_current_user)):
     if current_user.tokens < token_data.amount:
-        raise HTTPException(
-            status_code=400,
-            detail="Insufficient tokens"
-        )
-    current_user.tokens -= token_data.amount   
-    #just modify the token amount in db, don't see why we would need to log the amount used(CB)
-    db.alter_tokens(current_user.username, -token_data.amount)
-    #below code is commentted out for now
-    #fake_token_db[current_user.username]['used'] = fake_token_db[current_user.username]['used'] + token_data.amount
-    return {"message": "Tokens deducted successfully", "user": current_user}
+        raise HTTPException(status_code=400, detail="Insufficient tokens")
 
-# DELETE? (MS)
+    # Update in DB
+    db.alter_tokens(current_user.username, -token_data.amount)
+
+    # Re-fetch updated user from DB
+    updated_user = db.get_user(current_user.username)
+
+    return {
+        "message": "Tokens deducted successfully",
+        "user": updated_user
+    }
+
+
+# GOOD! (MS)
 # buy tokens
 class TokenPurchase(BaseModel):
     amount: int
 
+# GOOD! (MS)
 @app.post("/users/buy-tokens")
 async def buy_tokens(token_data: TokenPurchase, current_user: User = Depends(get_current_user)):
-    #check it user exists or in db(CB)
-    #unsure how to make this work with db_connector.py
-    #is it really ok that if the user is not in the database to
-    #just add them. we don't set the type of user either, or is this implicit
-    if current_user.username not in fake_token_db:
-        fake_token_db[current_user.username] = {
-            "username": current_user.username,
-            "tokens": 0,
-            "pay": 0,
-            "reward": 0,
-            "used": 0
-        }
-        ''' would be
-        if !(db.username_exists(current_user.username)):
-            db.register_user(current_user.username, password_data.current_password)
-            #i think this zeros everything out for tokens, etc and makes user free, need to consult
-            #person who made DB
-        
-        
-        '''
-    
-    # 更新用户的token数
-    current_user.tokens += token_data.amount
-    
-    #this is same as last function(CB)
+    # Add tokens in database
     db.alter_tokens(current_user.username, token_data.amount)
-    #again, I'm unsure why it is necessary to maintain the amount payed, used, etc.
-    #fake_token_db[current_user.username]['pay'] = fake_token_db[current_user.username].get('pay', 0) + token_data.amount
-    
-    return {"message": "Tokens bought successfully", "user": current_user}
 
-# DELETE? (MS)
+    # Re-fetch updated user info
+    updated_user = db.get_user(current_user.username)
+
+    return {
+        "message": "Tokens bought successfully",
+        "user": updated_user
+    }
+
+
+# GOOD! (MS)
 # reward tokens
 class TokenReward(BaseModel):
     amount: int
@@ -169,83 +156,71 @@ class TokenReward(BaseModel):
 @app.post("/users/reward-tokens")
 async def reward_tokens(token_data: TokenReward, current_user: User = Depends(get_current_user)):
     current_user.tokens += token_data.amount
-    #alter the current amount assuming before this was called current_user.token was correct(CB)
     db.alter_tokens(current_user.username, token_data.amount)
-    #fake_token_db[current_user.username]['reward'] = fake_token_db[current_user.username]['reward'] + token_data.amount
-    return {"message": "Tokens rewarded successfully", "user": current_user}    
+    return {"message": "Tokens rewarded successfully", "user": current_user}
 
-# DELETE? (MS)
+
+# GOOD! (MS)
 # 修改密码请求
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
 
-# 修改密码API
+# GOOD!
 @app.put("/users/change-password")
 async def change_password(
     password_data: ChangePasswordRequest, 
     current_user: User = Depends(get_current_user)
 ):
-    #this I can't touch since we did not store the hashed passwords in the real DB
-    #so I am not sure how to proceed here, it could get messy if I choose to store as is(CB)
-    if not verify_password(password_data.current_password, fake_users_db[current_user.username]["hashed_password"]):
+    # Step 1: Get current password from DB
+    user_record = db.get_user(current_user.username)
+    if not user_record or user_record["password"] != password_data.current_password:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Current password is incorrect"
         )
-    
-    # 更新密码
-    new_hashed_password = pwd_context.hash(password_data.new_password)
-    fake_users_db[current_user.username]["hashed_password"] = new_hashed_password
-    
+
+    # Step 2: Call the db function to update password
+    db.update_password(current_user.username, password_data.new_password)
+
     return {"message": "Password updated successfully"}
 
-# DELETE? (MS)
-# 删除自己的账号
+
+# GOOD! (MS)
 class DeleteAccountRequest(BaseModel):
     password: str
 
+# GOOD! (MS)
 @app.delete("/users/delete-account")
 async def delete_own_account(
     delete_data: DeleteAccountRequest,
     current_user: User = Depends(get_current_user)
 ):
-    # 验证用户密码
-    if not verify_password(delete_data.password, fake_users_db[current_user.username]["hashed_password"]):
+    # Step 1: Fetch actual password from DB
+    user_record = db.get_user(current_user.username)
+    
+    # Step 2: Check if password matches
+    if not user_record or user_record["password"] != delete_data.password:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Password is incorrect"
         )
-    
-    # 删除用户账号
-    username = current_user.username
-    
-    #this is the only thing necessary I think, maybe we need to delete user elsewhere aswell(CB)
-    db.delete_user(username)
-    
-    """
-    # 同时删除token数据
-    if username in fake_token_db:
-        del fake_token_db[username]
-    
-    # 同时删除协作者数据
-    if username in fake_collaborator_db:
-        del fake_collaborator_db[username]
-    
-    # 对于每个用户的协作者列表，移除被删除的用户
-    for collab_username, collab_data in fake_collaborator_db.items():
-        if username in collab_data["collaborators"]:
-            collab_data["collaborators"].remove(username)
-    """
+
+    # Step 3: Delete user account from DB
+    db.delete_user(current_user.username)
+
     return {"message": "Account deleted successfully"}
 
 
-# fetch token amount(CB)
+# GOOD! (MS)
+# fetch token amount (CB)
 @app.get("/users/token-stats")
 async def fetch_token_stats(current_user: User = Depends(get_current_user)):
-    return db.get_tokens(current_user.username)
+    tokens = db.get_tokens(current_user.username)
+    return {"username": current_user.username, "tokens": tokens}
 
 
+## LOOK AT LATER!!!!! (MS)
 # fetch collaborator list
 # the following does not exist in real DB so can't really alter this
 #ill leave as is for now(CB)
@@ -256,7 +231,7 @@ async def fetch_collaborator_list(current_user: User = Depends(get_current_user)
     return {"collaborators": collaborators_info}
 
 
-
+## LOOK AT LATER!!!!! (MS)
 # search collaborator
 #same for this as above
 #all things pertaining to collaboration needs to be done in DB(CB)
@@ -278,81 +253,70 @@ async def search_collaborator(searchName: str, current_user: User = Depends(get_
     
     return {"searched_user": searched_users}
 
-# DELETE? (MS)
+# GOOD! (MS)
 # 邀请协作者请求模型
 class InviteRequest(BaseModel):
     inviteUsername: str
 
-# DELETE? (MS)
+# GOOD! (MS)
 # 模拟邀请数据库
-fake_invitation_db = {
-    "invitations": []
-}
+class InviteRequest(BaseModel):
+    inviteUsername: str
 
 @app.post("/users/invite-collaborator")
-async def invite_collaborator(data: InviteRequest, current_user: User = Depends(get_current_user)): 
+async def invite_collaborator(data: InviteRequest, current_user: User = Depends(get_current_user)):
     target_username = data.inviteUsername
-    
-    # 检查被邀请的用户是否存在
-    if target_username not in fake_users_db:
-        raise HTTPException(
-            status_code=404,
-            detail=f"User {target_username} not found"
-        )
-    
-    # 检查是否已经是协作者
-    if target_username in fake_collaborator_db.get(current_user.username, {}).get("collaborators", []):
-        raise HTTPException(
-            status_code=400,
-            detail=f"User {target_username} is already your collaborator"
-        )
-    
-    # 检查是否已经发送过邀请
-    for invitation in fake_invitation_db["invitations"]:
-        if invitation["inviter"] == current_user.username and invitation["invitee"] == target_username and invitation["status"] == "pending":
-            raise HTTPException(
-                status_code=400,
-                detail=f"You have already sent an invitation to {target_username}"
-            )
-    
-    # 创建新邀请
-    new_invitation = {
-        "id": str(len(fake_invitation_db["invitations"]) + 1),
-        "inviter": current_user.username,
-        "invitee": target_username,
-        "status": "pending",
-        "createdAt": datetime.now().isoformat()
-    }
-    
-    # 添加到邀请数据库
-    fake_invitation_db["invitations"].append(new_invitation)
-    
-    return {"message": "Invitation sent successfully"}
 
+    # 1. Check if user exists
+    if not db.username_exists(target_username):
+        raise HTTPException(status_code=404, detail=f"User '{target_username}' not found")
+
+    # 2. Avoid duplicate invitations (check if collaboration already exists)
+    sql = """
+        SELECT 1 FROM collaborators
+        WHERE inviter = %s AND collaborator = %s
+    """
+    if db.query(sql, (current_user.username, target_username)):
+        raise HTTPException(status_code=400, detail=f"{target_username} is already your collaborator")
+
+    # 3. Add a new collaboration (empty text/correction, not yet received)
+    db.add_collaboration(
+        inviter=current_user.username,
+        collaborator=target_username,
+        text="",
+        correction="",
+        received=False
+    )
+
+    return {"message": f"Invitation sent to {target_username}"}
+
+
+# GOOD! (MS)
 # 获取协作者邀请列表
 @app.get("/users/invitations")
 async def get_invitations(current_user: User = Depends(get_current_user)):
-    # 获取当前用户收到的邀请
-    received_invitations = [
-        inv for inv in fake_invitation_db["invitations"]
-        if inv["invitee"] == current_user.username and inv["status"] == "pending"
-    ]
-    
-    # 获取当前用户发出的邀请
-    sent_invitations = [
-        inv for inv in fake_invitation_db["invitations"]
-        if inv["inviter"] == current_user.username
-    ]
-    
+    # Invitations received by the current user (pending = not yet received)
+    received_invitations = db.query("""
+        SELECT * FROM collaborators
+        WHERE collaborator = %s AND received = 0
+    """, (current_user.username,))
+
+    # Invitations sent by the current user (can include accepted/pending)
+    sent_invitations = db.query("""
+        SELECT * FROM collaborators
+        WHERE inviter = %s
+    """, (current_user.username,))
+
     return {
         "received": received_invitations,
         "sent": sent_invitations
     }
 
-# 处理协作者邀请（接受/拒绝）
+
+# GOOD! (MS)
 @app.post("/users/invitations/{invitation_id}/{action}")
 async def handle_invitation(
-    invitation_id: str,
+    invitation_id: int,
     action: str,
     current_user: User = Depends(get_current_user)
 ):
@@ -361,90 +325,55 @@ async def handle_invitation(
             status_code=400,
             detail="Invalid action. Must be 'accept' or 'reject'"
         )
-    
-    # 查找邀请
-    invitation_found = False
-    for invitation in fake_invitation_db["invitations"]:
-        if invitation["id"] == invitation_id and invitation["invitee"] == current_user.username:
-            invitation_found = True
-            invitation["status"] = "accepted" if action == "accept" else "rejected"
-            
-            # 如果接受邀请，将邀请者添加为协作者
-            if action == "accept":
-                inviter = invitation["inviter"]
-                
-                # 确保协作者数据库中有邀请者的记录
-                if inviter not in fake_collaborator_db:
-                    fake_collaborator_db[inviter] = {"collaborators": []}
-                
-                # 添加当前用户为邀请者的协作者
-                if current_user.username not in fake_collaborator_db[inviter]["collaborators"]:
-                    fake_collaborator_db[inviter]["collaborators"].append(current_user.username)
-            
-            break
-    
-    if not invitation_found:
+
+    # Step 1: Retrieve the invitation
+    invitation = db.get_collaboration_by_id(invitation_id)
+
+    if not invitation or invitation["collaborator"] != current_user.username or invitation["received"] != 0:
         raise HTTPException(
             status_code=404,
-            detail="Invitation not found or you are not the invitee"
+            detail="Invitation not found, not pending, or not addressed to you"
         )
-    
-    return {"message": f"Invitation {action}ed successfully"}
 
-# DELETE? (MS)
+    if action == "accept":
+        db.update_collaboration(
+            id=invitation_id,
+            new_text=invitation["text"],
+            new_correction=invitation["correction"],
+            received=True  # mark as accepted
+        )
+        return {"message": "Invitation accepted successfully"}
+    
+    elif action == "reject":
+        db.delete_collaboration(invitation_id)
+        return {"message": "Invitation rejected and deleted successfully"}
+
+
+
+# GOOD! (MS)
 #same for here as collaborators, the DB for this does not exist yet so
 #no functionality can be added(CB)
-class Document(BaseModel):
-    id: str
-    title: str
-    date: str
-    content: str
-    wordCount: int
-
-# DELETE? (MS)
-# 文档协作者关联表 - 弱实体关系
-fake_document_collaborators_db = {
-    "1": ["paid_user2", "paid_user3"],  # document 1 的协作者
-    "3": ["paid_user4"],                # document 3 的协作者
-    "5": ["paid_user2"],                # document 5 的协作者
-    "7": ["paid_user3", "paid_user4"],  # document 7 的协作者
-}
-
-# 修改文档获取列表API，添加协作者信息和过滤功能
-@app.get("/documents")
-async def fetch_document_list(
+@app.get("/user/history")
+async def fetch_user_history(
     current_user: User = Depends(get_current_user),
-    filter_type: str = None,
-    sort_by: str = "latest_update"
+    filter_type: str = Query(default=None, enum=["own"], description="Filter by type"),
+    sort_by: str = Query(default="latest_update", enum=["latest_update"], description="Sort order")
 ):
-    all_documents = []
-    
-    # 获取用户创建的文档
-    for document_id, document_info in fake_document_db.items():
-        # 如果是用户自己创建的文档
-        if document_info["user"] == current_user.username:
-            document_with_author = document_info.copy()
-            document_with_author["is_owner"] = True
-            all_documents.append(document_with_author)
-        # 或者用户是此文档的协作者
-        elif document_id in fake_document_collaborators_db and current_user.username in fake_document_collaborators_db[document_id]:
-            document_with_author = document_info.copy()
-            document_with_author["is_owner"] = False
-            all_documents.append(document_with_author)
-    
-    # 应用过滤条件
+    # Step 1: Fetch all history entries for this user
+    history_entries = db.get_user_history_by_user(current_user.username)
+
+    # Step 2: Apply optional filters
     if filter_type == "own":
-        filtered_documents = [doc for doc in all_documents if doc["is_owner"]]
-    elif filter_type == "collaborated":
-        filtered_documents = [doc for doc in all_documents if not doc["is_owner"]]
+        filtered = history_entries  # All are user's own history
     else:
-        filtered_documents = all_documents
-    
-    # 排序
-    if sort_by == "latest_update":
-        filtered_documents.sort(key=lambda x: x["latest_update"], reverse=True)
-    
-    return {"documents": filtered_documents}
+        filtered = history_entries
+
+    # Step 3: Sort by created_at descending (latest first)
+    sorted_history = sorted(filtered, key=lambda x: x.get("created_at", ""), reverse=True)
+
+    return {"history": sorted_history}
+
+
 
 # 修改文档详情API，添加协作者信息
 @app.get("/documents/detail/{document_id}")
