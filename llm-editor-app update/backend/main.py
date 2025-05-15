@@ -1023,29 +1023,20 @@ async def submit_complaint(
     current_user: User = Depends(get_current_user)
 ):
     # 确认被投诉的用户存在
-    if complaint_data.collaborator not in fake_users_db:
+    if not db.username_exists(complaint_data.collaborator):
         raise HTTPException(
             status_code=404,
             detail=f"User {complaint_data.collaborator} not found"
         )
     
-    # 生成唯一ID
-    complaint_id = str(len(fake_complaints_db["complaints"]) + 1)
+    # Combine subject and content as the "correction" field since that's what the DB expects
+    correction_details = f"Subject: {complaint_data.subject}\nContent: {complaint_data.content}"
     
-    # 创建新投诉
-    new_complaint = {
-        "id": complaint_id,
-        "username": current_user.username,
-        "collaborator": complaint_data.collaborator,
-        "subject": complaint_data.subject,
-        "content": complaint_data.content,
-        "reason": complaint_data.reason,
-        "status": "pending",
-        "createdAt": datetime.now().isoformat(),
-        "projectName": "Collaborative Document" # 默认项目名称
-    }
-    
-    # 添加到模拟数据库
-    fake_complaints_db["complaints"].append(new_complaint)
+    # Use the add_correction function from the DB
+    success = db.add_correction(
+        username=current_user.username,
+        correction=correction_details,
+        reason=complaint_data.reason
+    )
     
     return {"message": "Complaint submitted successfully", "id": complaint_id}
