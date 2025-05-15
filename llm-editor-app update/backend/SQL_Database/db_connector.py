@@ -215,6 +215,17 @@ class Database:
             cursor.execute(sql)
             return cursor.fetchall()
 # -----------------------------------------------------------------------------------------------------
+# Check for reviewed blacklist words. Return all rows of data. for completeness so we can print the whole list
+    def get_unreviewed_blacklist_words(self):
+        sql = f'''
+            SELECT *
+            FROM blacklist
+            WHERE super_user_reviewed = 1
+        '''
+        with self.connection.cursor() as cursor:
+            cursor.execute(sql)
+            return cursor.fetchall()
+# -----------------------------------------------------------------------------------------------------
 # Alter super user reviewed value (0 = not reviewed, 1 = reviewed and approved)
     def blacklist_alter_reviewed(self, word, reviewed):
         sql = f'''
